@@ -1,0 +1,99 @@
+diff --git a/libPS4/include/debug.h b/libPS4/include/debug.h
+index c9e1667..b36e2d7 100644
+--- a/libPS4/include/debug.h
++++ b/libPS4/include/debug.h
+@@ -10,17 +10,28 @@
+ 
+ extern int DEBUG_SOCK;
+ 
++// Zeroes a buffer without a library call: clang turns '= {0}' on big locals into a direct
++// call to the symbol 'memset', which here is the libc function pointer in .bss, not a function.
++static inline __attribute__((always_inline)) void payload_bzero(void *p, unsigned long n) {
++  __asm__ volatile("rep stosb"
++                   : "+D"(p), "+c"(n)
++                   : "a"(0)
++                   : "memory");
++}
++
+ #define printf_debug(...)                                                                                                  \
+   do {                                                                                                                     \
+     {                                                                                                                      \
+-      char debug_message[256] = {0};                                                                                       \
++      char debug_message[256];                                                                                             \
++      payload_bzero(debug_message, sizeof(debug_message));                                                                 \
+       int size = snprintf_s(debug_message, sizeof(debug_message), "[DEBUG] [%s (%s:%d)] ", __FILE__, __FUNCTION__, __LINE__); \
+       syscall(601, 7, debug_message, 0);                                                                                   \
+       if (DEBUG_SOCK >= 0) {                                                                                               \
+         SckSend(DEBUG_SOCK, debug_message, size);                                                                          \
+       }                                                                                                                    \
+     }                                                                                                                      \
+-    char debug_message[512] = {0};                                                                                         \
++    char debug_message[512];                                                                                               \
++    payload_bzero(debug_message, sizeof(debug_message));                                                                   \
+     int size = snprintf_s(debug_message, sizeof(debug_message), ##__VA_ARGS__);                                            \
+     syscall(601, 7, debug_message, 0);                                                                                     \
+     if (DEBUG_SOCK >= 0) {                                                                                                 \
+diff --git a/libPS4/include/payload_utils.h b/libPS4/include/payload_utils.h
+index 0d8f78b..28628cf 100644
+--- a/libPS4/include/payload_utils.h
++++ b/libPS4/include/payload_utils.h
+@@ -110,7 +110,7 @@ static inline __attribute__((always_inline)) uint64_t __readmsr(unsigned long __
+ 
+ static inline __attribute__((always_inline)) uint64_t readCr0(void) {
+   uint64_t cr0;
+-  __asm__ volatile("movq %0, %%cr0"
++  __asm__ volatile("mov %0, cr0"
+                    : "=r"(cr0)
+                    :
+                    : "memory");
+@@ -118,7 +118,7 @@ static inline __attribute__((always_inline)) uint64_t readCr0(void) {
+ }
+ 
+ static inline __attribute__((always_inline)) void writeCr0(uint64_t cr0) {
+-  __asm__ volatile("movq %%cr0, %0"
++  __asm__ volatile("mov cr0, %0"
+                    :
+                    : "r"(cr0)
+                    : "memory");
+diff --git a/libPS4/include/syscall.h b/libPS4/include/syscall.h
+index 4982af1..007b053 100644
+--- a/libPS4/include/syscall.h
++++ b/libPS4/include/syscall.h
+@@ -9,7 +9,7 @@
+   __asm__(".intel_syntax noprefix"); \
+   __asm__(".globl " #name "");       \
+   __asm__("" #name ":");             \
+-  __asm__("movq rax, " #number "");  \
++  __asm__("mov rax, " #number "");  \
+   __asm__("jmp syscall_macro");
+ 
+ unsigned long syscall(unsigned long n, ...);
+diff --git a/libPS4/include/sysutil.h b/libPS4/include/sysutil.h
+index e33979a..5929010 100644
+--- a/libPS4/include/sysutil.h
++++ b/libPS4/include/sysutil.h
+@@ -31,7 +31,8 @@ void shutdown();
+ // https://github.com/OSM-Made/PS4-Notify
+ #define printf_notification(...)                                                                             \
+   do {                                                                                                       \
+-    SceNotificationRequest noti_buffer = {};                                                                 \
++    SceNotificationRequest noti_buffer;                                                                      \
++    payload_bzero(&noti_buffer, sizeof(noti_buffer));                                                        \
+     static const char icon_uri[] = "cxml://psnotification/tex_icon_system";                                  \
+     noti_buffer.use_icon_image_uri = 1;                                                                      \
+     noti_buffer.target_id = -1;                                                                              \
+diff --git a/libPS4/source/syscall.s b/libPS4/source/syscall.s
+index 4171a2a..73d5149 100644
+--- a/libPS4/source/syscall.s
++++ b/libPS4/source/syscall.s
+@@ -22,8 +22,8 @@ _error:
+ 	call __error[rip]
+ 	pop rcx
+ 	mov [rax], ecx
+-	movq rax, -1
+-	movq rdx, -1
++	mov rax, -1
++	mov rdx, -1
+ 
+ _end:
+ 	ret

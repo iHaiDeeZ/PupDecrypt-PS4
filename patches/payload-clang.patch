@@ -1,0 +1,13 @@
+diff --git a/source/decrypt.c b/source/decrypt.c
+index 303ec2c..765e27e 100644
+--- a/source/decrypt.c
++++ b/source/decrypt.c
+@@ -6,6 +6,8 @@
+ #include "defines.h"
+ #include "debug.h"
+ 
++uint8_t GetElapsed(uint64_t ResetInterval);
++
+ int verify_segment(const decrypt_state* state, int index, pup_segment* segment, int additional)
+ {
+   int result;

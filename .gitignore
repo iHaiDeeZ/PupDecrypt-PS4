@@ -1,0 +1,8 @@
+# Build output (the payload bin ships in GitHub releases)
+out/
+
+# Never commit firmware: update files, decrypted parts, unpacked images
+*.PUP
+*.pup
+*.dec
+*.img

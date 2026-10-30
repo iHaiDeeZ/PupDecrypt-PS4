@@ -1,0 +1,55 @@
+diff --git a/Program.cs b/Program.cs
+index b1e14d2..da6468f 100644
+--- a/Program.cs
++++ b/Program.cs
+@@ -248,6 +248,23 @@ namespace pup_unpack
+             }
+         }
+ 
++        // Stream.Read may return fewer bytes than asked for (inflater streams do on newer .NET),
++        // so keep reading until the count is reached or the stream ends.
++        private static int ReadFull(Stream input, byte[] buffer, int offset, int count)
++        {
++            int total = 0;
++            while (total < count)
++            {
++                var read = input.Read(buffer, offset + total, count - total);
++                if (read <= 0)
++                {
++                    break;
++                }
++                total += read;
++            }
++            return total;
++        }
++
+         private static void CopyStream(Stream input, Stream output, long size)
+         {
+             long left = size;
+@@ -255,7 +272,7 @@ namespace pup_unpack
+             while (left > 0)
+             {
+                 var block = (int)(Math.Min(left, data.Length));
+-                var read = input.Read(data, 0, block);
++                var read = ReadFull(input, data, 0, block);
+                 if (read != block)
+                 {
+                     throw new EndOfStreamException();
+@@ -403,7 +420,7 @@ namespace pup_unpack
+                             }
+ 
+                             var zlib = new InflaterInputStream(temp);
+-                            var read = zlib.Read(buffer, 0, (int)uncompressedReadSize);
++                            var read = ReadFull(zlib, buffer, 0, (int)uncompressedReadSize);
+                             if (read != uncompressedReadSize)
+                             {
+                                 throw new InvalidOperationException();
+@@ -415,7 +432,7 @@ namespace pup_unpack
+                     else
+                     {
+                         uncompressedReadSize = compressedReadSize;
+-                        var read = input.Read(buffer, 0, (int)compressedReadSize);
++                        var read = ReadFull(input, buffer, 0, (int)compressedReadSize);
+                         if (read != compressedReadSize)
+                         {
+                             throw new InvalidOperationException();
